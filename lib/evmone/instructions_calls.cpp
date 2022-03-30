@@ -4,11 +4,18 @@
 
 #include "eof.hpp"
 #include "instructions.hpp"
+#include "LibSnark.h"
 
 namespace evmone::instr::core
 {
-template <Opcode Op>
-Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexcept
+auto is_precompile(const evmc::address& addr) -> bool {
+    auto addr_copy = addr;
+    std::memset(&addr_copy.bytes[18], 0, 2);
+    return evmc::is_zero(addr_copy);
+}
+
+template <evmc_opcode Op>
+evmc_status_code call_impl(StackTop stack, ExecutionState& state) noexcept
 {
     static_assert(
         Op == OP_CALL || Op == OP_CALLCODE || Op == OP_DELEGATECALL || Op == OP_STATICCALL);
@@ -109,6 +116,51 @@ Result call_impl(StackTop stack, int64_t gas_left, ExecutionState& state) noexce
             if (!is_eof_container({target_code_prefix, s}))
                 return {EVMC_SUCCESS, gas_left};
         }
+    }
+
+    if(is_precompile(dst)) {
+        if(Op != OP_STATICCALL) {
+            return EVMC_STATIC_MODE_VIOLATION;
+        }
+
+        auto contract_id = static_cast<uint16_t>(intx::be::load<uint256>(dst));
+        auto inp = bytesConstRef(msg.input_data, msg.input_size);
+        auto retval = std::pair<bool, bytevec>();
+        switch(contract_id) {
+            case 6: {
+                if((state.gas_left -= 150) < 0) {
+                    return EVMC_OUT_OF_GAS;
+                }
+                retval = alt_bn128_G1_add(inp);
+                break;
+            }
+            case 7: {
+                if((state.gas_left -= 6000) < 0) {
+                    return EVMC_OUT_OF_GAS;
+                }
+                retval = alt_bn128_G1_mul(inp);
+                break;
+            }
+            case 8: {
+                auto k = msg.input_size / (32 * 6);
+                auto gas_used = 34000 * k + 45000;
+                if((state.gas_left -= gas_used) < 0) {
+                    return EVMC_OUT_OF_GAS;
+                }
+                retval = alt_bn128_pairing_product(inp);
+                break;
+            }
+            default: {
+                // Not implemented
+                stack.top() = false;
+                return EVMC_SUCCESS;
+            }
+        }
+
+        stack.top() = retval.first;
+        if (const auto copy_size = std::min(size_t(output_size), retval.second.size()); copy_size > 0)
+            std::memcpy(&state.memory[size_t(output_offset)], retval.second.data(), copy_size);
+        return EVMC_SUCCESS;
     }
 
     const auto result = state.host.call(msg);
