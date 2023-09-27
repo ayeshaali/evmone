@@ -42,6 +42,7 @@ find_package(ethash CONFIG REQUIRED)
 #hunter_add_package(libff)
 find_library(FF_LIBRARY ff REQUIRED)
 find_package(boost CONFIG REQUIRED)
+include_directories( ${Boost_INCLUDE_DIRS} )
 find_library(GMP_LIBRARY gmp REQUIRED)
 
 option(EVMC_TOOLS "Build EVMC test tools" ${EVMONE_TESTING})
