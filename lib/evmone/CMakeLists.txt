@@ -32,7 +32,7 @@ add_library(evmone
     vm.cpp
     vm.hpp
 )
-target_link_libraries(evmone PUBLIC evmc::evmc intx::intx PRIVATE evmc::instructions evmc::hex ethash::keccak ${FF_LIBRARY} ${GMP_LIBRARY})
+target_link_libraries(evmone PUBLIC evmc::evmc intx::intx PRIVATE evmc::instructions ethash::keccak ${FF_LIBRARY} ${GMP_LIBRARY})
 target_include_directories(evmone PUBLIC
     $<BUILD_INTERFACE:${include_dir}>$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
